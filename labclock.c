@@ -4,8 +4,11 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <pixman.h>
+#include <wayland-client.h>
+#include "utf8.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LINE_LEN 128
 
 static struct fcft_font *font;
@@ -93,4 +96,38 @@ static struct wl_buffer *draw_frame(char *text) {
  		pixman_image_composite32(
  			PIXMAN_OP_OVER, fgfill, glyph->pix, foreground, 0, 0, 0, 0,
  			xpos + glyph->x, ypos - glyph->y, glyph->width, glyph->height);
+
+	/* start drawing at center-left (ypos sets the text baseline) */
+	uint32_t xpos = 0, maxxpos = 0;
+	uint32_t ypos = (height + font->ascent - font->descent) / 2;
+
+	uint32_t codepoint, lastcp = 0, state = UTF8_ACCEPT;
+	for (char *p = text; *p; p++) {
+		/* check for inline ^ commands */
+		if (state == UTF8_ACCEPT && *p == '^') p++; 
+
+		/* return nonzero if more bytes are needed */
+		if (utf8decode(&state, &codepoint, *p)) continue;
+
+    /* rasterize a glyph for a single UTF-32 codepoint */
+		const struct fcft_glyph *glyph = fcft_rasterize_char_utf32(font, codepoint,
+				FCFT_SUBPIXEL_DEFAULT);
+		if (!glyph) continue;
+
+		/* adjust x position based on kerning with previous glyph */
+		long x_kern = 0;
+		if (lastcp)
+			fcft_kerning(font, lastcp, codepoint, &x_kern, NULL);
+		xpos += x_kern;
+		lastcp = codepoint;
+
+    /* apply foreground for subpixel rendered text */
+ 		pixman_image_composite32(
+ 			PIXMAN_OP_OVER, fgfill, glyph->pix, foreground, 0, 0, 0, 0,
+ 			xpos + glyph->x, ypos - glyph->y, glyph->width, glyph->height);
+
+		/* increment pen position */
+		xpos += glyph->advance.x;
+		ypos += glyph->advance.y;
+		maxxpos = MAX(maxxpos, xpos);
   }
