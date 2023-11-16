@@ -131,3 +131,22 @@ static struct wl_buffer *draw_frame(char *text) {
 		ypos += glyph->advance.y;
 		maxxpos = MAX(maxxpos, xpos);
   }
+ 	pixman_image_unref(fgfill);
+
+	if (state != UTF8_ACCEPT)
+		fprintf(stderr, "malformed UTF-8 sequence\n");
+
+	/* make it colorful */
+	int32_t xdraw = (width - maxxpos) / 2;
+	pixman_image_composite32(PIXMAN_OP_OVER, background, NULL, bar, 0, 0, 0, 0,
+			xdraw, 0, width, height);
+	pixman_image_composite32(PIXMAN_OP_OVER, foreground, NULL, bar, 0, 0, 0, 0,
+			xdraw, 0, width, height);
+
+	pixman_image_unref(foreground);
+	pixman_image_unref(background);
+	pixman_image_unref(bar);
+	munmap(data, bufsize);
+	return buffer;
+}
+
