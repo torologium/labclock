@@ -150,3 +150,34 @@ static struct wl_buffer *draw_frame(char *text) {
 	return buffer;
 }
 
+/* layer-surface setup adapted from wlroots */
+static void layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface, uint32_t serial, uint32_t w, uint32_t h) {
+	width = w;
+	height = h;
+	stride = width * 4;
+	bufsize = stride * height;
+
+	if (on_top > 0)
+		on_top = height;
+
+	zwlr_layer_surface_v1_set_exclusive_zone(layer_surface, on_top);
+	zwlr_layer_surface_v1_ack_configure(surface, serial);
+
+	struct wl_buffer *buffer = draw_frame(lastline);
+	if (!buffer)
+		return;
+	wl_surface_attach(wl_surface, buffer, 0, 0);
+	wl_surface_damage_buffer(wl_surface, 0, 0, width, height);
+	wl_surface_commit(wl_surface);
+}
+
+static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *surface) {
+	zwlr_layer_surface_v1_destroy(surface);
+	wl_surface_destroy(wl_surface);
+	run_display = false;
+}
+
+static struct zwlr_layer_surface_v1_listener layer_surface_listener = {
+	.configure = layer_surface_configure,
+	.closed = layer_surface_closed,
+};
