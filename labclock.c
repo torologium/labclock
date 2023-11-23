@@ -13,6 +13,15 @@
 
 static struct fcft_font *font;
 
+static struct wl_display *display;
+static struct wl_compositor *compositor;
+static struct wl_shm *shm;
+static struct zwlr_layer_shell_v1 *layer_shell;
+
+static struct zwlr_layer_surface_v1 *layer_surface;
+static struct wl_output *wl_output;
+static struct wl_surface *wl_surface;
+
 /* foreground text colors */
 static pixman_color_t
 	fgcolor = {
@@ -181,3 +190,22 @@ static struct zwlr_layer_surface_v1_listener layer_surface_listener = {
 	.configure = layer_surface_configure,
 	.closed = layer_surface_closed,
 };
+
+static void handle_global(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+	if (strcmp(interface, wl_compositor_interface.name) == 0) {
+		compositor = wl_registry_bind(registry, name,
+				&wl_compositor_interface, 4);
+	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
+		shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+	} else if (strcmp(interface, wl_output_interface.name) == 0) {
+		struct wl_output *o = wl_registry_bind(registry, name,
+				&wl_output_interface, 1);
+		if (output-- == 0)
+			wl_output = o;
+	} else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
+		layer_shell = wl_registry_bind(registry, name,
+				&zwlr_layer_shell_v1_interface, 1);
+	}
+}
+
+static const struct wl_registry_listener registry_listener = {.global = handle_global,};
